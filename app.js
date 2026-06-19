@@ -329,12 +329,14 @@ function loadVoicesForEngine(engine) {
 
     } else if (engine === 'elevenlabs') {
         const defaultElevenVoices = [
-            { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel (Féminin - Doux)" },
-            { id: "AZnzlk1XhkjscfMwqSjK", name: "Domi (Féminin - Énergique)" },
-            { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella (Féminin - Narratif)" },
-            { id: "ErXwobaYiN019PkySvjV", name: "Antoni (Masculin - Profond)" },
-            { id: "TxGEqn7nUa5To4YeeJSt", name: "Josh (Masculin - Professionnel)" },
-            { id: "pNInz6obpgfrhhF21wbu", name: "Adam (Masculin - Narratif)" }
+            { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah (Féminin - Clair)" },
+            { id: "cgSgspJ2msm6clMCkdW9", name: "Jessica (Féminin - Expressif)" },
+            { id: "Xb7hH8MSUJpSbSDYk0k2", name: "Alice (Féminin - Narratif)" },
+            { id: "XrExE9yKIg1WjnnlVkGX", name: "Matilda (Féminin - Professionnel)" },
+            { id: "CwhRBWXzGAHq8TQ4Fs17", name: "Roger (Masculin - Posé)" },
+            { id: "JBFqnCBsd6RMkjVDRZzb", name: "George (Masculin - Chaleureux)" },
+            { id: "cjVigY5qzO86Huf0OWal", name: "Eric (Masculin - Doux)" },
+            { id: "pqHfZKP75CvOlQylNhV4", name: "Bill (Masculin - Senior)" }
         ];
 
         defaultElevenVoices.forEach(voice => {
