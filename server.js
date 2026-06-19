@@ -18,7 +18,8 @@ app.get('/api/config', (req, res) => {
         groq: process.env.GROQ_API_KEY || '',
         openrouter: process.env.OPENROUTER_API_KEY || '',
         mistral: process.env.MISTRAL_API_KEY || '',
-        cohere: process.env.COHERE_API_KEY || ''
+        cohere: process.env.COHERE_API_KEY || '',
+        elevenlabs: process.env.ELEVENLABS_API_KEY || ''
     });
 });
 

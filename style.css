@@ -930,6 +930,48 @@ select option {
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
+/* TTS Speaker Buttons */
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+}
+
+.tts-play-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: var(--transition-fast);
+}
+
+.tts-play-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tts-play-btn.playing {
+    color: #ffffff;
+    background: var(--accent-gradient);
+    border-color: transparent;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+    animation: pulseGlow 1.5s infinite alternate;
+}
+
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.3); }
+    100% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .app-container {

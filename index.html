@@ -51,6 +51,28 @@
                         </select>
                     </div>
 
+                    <!-- Vocal Settings -->
+                    <div class="input-group">
+                        <label for="tts-engine-select">Moteur Vocal (TTS)</label>
+                        <select id="tts-engine-select">
+                            <option value="off" selected>Désactivé</option>
+                            <option value="browser">Navigateur (Gratuit)</option>
+                            <option value="elevenlabs">ElevenLabs (Premium)</option>
+                        </select>
+                    </div>
+
+                    <div id="voice-select-container" class="input-group" style="display: none;">
+                        <label for="tts-voice-select">Voix</label>
+                        <select id="tts-voice-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div id="autoplay-container" style="display: none; align-items: center; gap: 8px; margin-top: 5px;">
+                        <input type="checkbox" id="autoplay-checkbox" style="cursor: pointer; width: auto;">
+                        <label for="autoplay-checkbox" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none;">Lecture automatique</label>
+                    </div>
+
                     <!-- Manual API Keys Dropdown -->
                     <div class="accordion">
                         <button class="accordion-trigger" type="button" id="accordion-trigger">
@@ -77,6 +99,10 @@
                             <div class="input-group-sm">
                                 <label for="key-cohere">Clé Cohere</label>
                                 <input type="password" id="key-cohere" placeholder="Automatique (.env) ou locale...">
+                            </div>
+                            <div class="input-group-sm">
+                                <label for="key-elevenlabs">Clé ElevenLabs</label>
+                                <input type="password" id="key-elevenlabs" placeholder="Automatique (.env) ou locale...">
                             </div>
                             <button id="save-keys-btn" class="btn btn-secondary btn-sm" type="button" style="margin-top: 10px; width: 100%; font-size: 0.75rem; padding: 6px 10px;">
                                 <i class="fa-solid fa-floppy-disk"></i> Sauvegarder localement

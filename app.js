@@ -74,6 +74,13 @@ const accordionTrigger = document.getElementById('accordion-trigger');
 const accordionContent = document.getElementById('accordion-content');
 const saveKeysBtn = document.getElementById('save-keys-btn');
 
+// Vocal Settings DOM Elements
+const ttsEngineSelect = document.getElementById('tts-engine-select');
+const voiceSelectContainer = document.getElementById('voice-select-container');
+const ttsVoiceSelect = document.getElementById('tts-voice-select');
+const autoplayContainer = document.getElementById('autoplay-container');
+const autoplayCheckbox = document.getElementById('autoplay-checkbox');
+
 // App State
 let activeProvider = localStorage.getItem('active_provider') || 'gemini';
 let activeModel = localStorage.getItem('active_model') || 'gemini-2.5-flash';
@@ -82,10 +89,19 @@ let keys = {
     groq: '',
     openrouter: '',
     mistral: '',
-    cohere: ''
+    cohere: '',
+    elevenlabs: ''
 };
 let conversations = JSON.parse(localStorage.getItem('gemini_conversations')) || [];
 let activeConversationId = localStorage.getItem('gemini_active_conv_id') || null;
+
+// Vocal State
+let activeTtsEngine = localStorage.getItem('active_tts_engine') || 'off';
+let activeTtsVoice = localStorage.getItem('active_tts_voice') || '';
+let autoplayEnabled = localStorage.getItem('autoplay_enabled') === 'true';
+let currentAudio = null;
+let currentSpeechUtterance = null;
+let browserVoices = [];
 
 // Initialization
 async function init() {
@@ -97,14 +113,19 @@ async function init() {
         });
     }
 
-    // Set active provider
+    // Set active provider & vocal settings UI values
     providerSelect.value = activeProvider;
+    ttsEngineSelect.value = activeTtsEngine;
+    autoplayCheckbox.checked = autoplayEnabled;
     
     // Load config from Express API (.env) or localStorage
     await loadConfig();
 
     // Populate models select and badge
     populateModels(activeProvider, activeModel);
+
+    // Setup Vocal interface layout
+    handleTtsEngineChange();
 
     // Event listener: change provider
     providerSelect.addEventListener('change', (e) => {
@@ -120,6 +141,17 @@ async function init() {
         activeModel = e.target.value;
         localStorage.setItem('active_model', activeModel);
         updateBadge();
+    });
+
+    // Vocal UI handlers
+    ttsEngineSelect.addEventListener('change', handleTtsEngineChange);
+    ttsVoiceSelect.addEventListener('change', (e) => {
+        activeTtsVoice = e.target.value;
+        localStorage.setItem('active_tts_voice', activeTtsVoice);
+    });
+    autoplayCheckbox.addEventListener('change', (e) => {
+        autoplayEnabled = e.target.checked;
+        localStorage.setItem('autoplay_enabled', autoplayEnabled);
     });
 
     // Settings Accordion Trigger
@@ -244,6 +276,178 @@ function updateBadge() {
     statusDot.classList.add('green');
 }
 
+// Handle voice engine selection change
+function handleTtsEngineChange() {
+    activeTtsEngine = ttsEngineSelect.value;
+    localStorage.setItem('active_tts_engine', activeTtsEngine);
+
+    if (activeTtsEngine === 'off') {
+        voiceSelectContainer.style.display = 'none';
+        autoplayContainer.style.display = 'none';
+        stopSpeaking();
+    } else {
+        voiceSelectContainer.style.display = 'block';
+        autoplayContainer.style.display = 'flex';
+        loadVoicesForEngine(activeTtsEngine);
+    }
+}
+
+// Load voices based on selected vocal engine
+function loadVoicesForEngine(engine) {
+    ttsVoiceSelect.innerHTML = '';
+    
+    if (engine === 'browser') {
+        if (!window.speechSynthesis) {
+            ttsVoiceSelect.innerHTML = '<option value="">Non supporté</option>';
+            return;
+        }
+        
+        const fetchVoices = () => {
+            browserVoices = window.speechSynthesis.getVoices();
+            ttsVoiceSelect.innerHTML = '';
+            
+            // Populates voices in selector
+            browserVoices.forEach(voice => {
+                const opt = document.createElement('option');
+                opt.value = voice.name;
+                opt.textContent = `${voice.name} (${voice.lang})`;
+                if (voice.name === activeTtsVoice) {
+                    opt.selected = true;
+                } else if (!activeTtsVoice && voice.lang.startsWith('fr')) {
+                    opt.selected = true;
+                    activeTtsVoice = voice.name;
+                    localStorage.setItem('active_tts_voice', activeTtsVoice);
+                }
+                ttsVoiceSelect.appendChild(opt);
+            });
+        };
+
+        fetchVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = fetchVoices;
+        }
+
+    } else if (engine === 'elevenlabs') {
+        const defaultElevenVoices = [
+            { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel (Féminin - Doux)" },
+            { id: "AZnzlk1XhkjscfMwqSjK", name: "Domi (Féminin - Énergique)" },
+            { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella (Féminin - Narratif)" },
+            { id: "ErXwobaYiN019PkySvjV", name: "Antoni (Masculin - Profond)" },
+            { id: "TxGEqn7nUa5To4YeeJSt", name: "Josh (Masculin - Professionnel)" },
+            { id: "pNInz6obpgfrhhF21wbu", name: "Adam (Masculin - Narratif)" }
+        ];
+
+        defaultElevenVoices.forEach(voice => {
+            const opt = document.createElement('option');
+            opt.value = voice.id;
+            opt.textContent = voice.name;
+            if (voice.id === activeTtsVoice) {
+                opt.selected = true;
+            }
+            ttsVoiceSelect.appendChild(opt);
+        });
+
+        if (!activeTtsVoice || !defaultElevenVoices.some(v => v.id === activeTtsVoice)) {
+            activeTtsVoice = defaultElevenVoices[0].id;
+            localStorage.setItem('active_tts_voice', activeTtsVoice);
+        }
+    }
+}
+
+// Stop any current reading voice audio
+function stopSpeaking() {
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    document.querySelectorAll('.tts-play-btn').forEach(btn => {
+        btn.classList.remove('playing');
+        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    });
+}
+
+// Read text out loud using selected vocal engine and active voice
+async function speakText(text, playButton) {
+    if (playButton.classList.contains('playing')) {
+        stopSpeaking();
+        return;
+    }
+
+    stopSpeaking();
+
+    // Set playing status inside button UI
+    playButton.classList.add('playing');
+    playButton.innerHTML = '<i class="fa-solid fa-stop"></i>';
+
+    // Strip HTML and formatting for clean output speech text
+    const cleanText = text.replace(/<\/?[^>]+(>|$)/g, "")
+                          .replace(/[*_`#]/g, "")
+                          .replace(/```[\s\S]*?```/g, "[Bloc de code]");
+
+    if (activeTtsEngine === 'browser') {
+        if (!window.speechSynthesis) {
+            alert("La synthèse vocale du navigateur n'est pas prise en charge.");
+            stopSpeaking();
+            return;
+        }
+
+        currentSpeechUtterance = new SpeechSynthesisUtterance(cleanText);
+        const voice = browserVoices.find(v => v.name === activeTtsVoice);
+        if (voice) {
+            currentSpeechUtterance.voice = voice;
+        }
+
+        currentSpeechUtterance.onend = () => stopSpeaking();
+        currentSpeechUtterance.onerror = () => stopSpeaking();
+        window.speechSynthesis.speak(currentSpeechUtterance);
+
+    } else if (activeTtsEngine === 'elevenlabs') {
+        const elKey = keys.elevenlabs;
+        if (!elKey) {
+            alert("Veuillez configurer votre clé API ElevenLabs dans la section paramètres.");
+            stopSpeaking();
+            return;
+        }
+
+        try {
+            const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${activeTtsVoice}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'xi-api-key': elKey
+                },
+                body: JSON.stringify({
+                    text: cleanText,
+                    model_id: 'eleven_multilingual_v2',
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.detail?.message || `Erreur ElevenLabs (${response.status})`);
+            }
+
+            const blob = await response.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            currentAudio = new Audio(audioUrl);
+            currentAudio.onended = () => stopSpeaking();
+            currentAudio.onerror = () => stopSpeaking();
+            currentAudio.play();
+
+        } catch (e) {
+            alert("Erreur de synthèse ElevenLabs : " + e.message);
+            stopSpeaking();
+        }
+    }
+}
+
 // Conversation Management
 function startNewChat() {
     activeConversationId = 'conv_' + Date.now();
@@ -342,7 +546,6 @@ function loadConversation(id) {
 // Message Rendering and Formatting
 function appendMessage(role, text, providerTheme = 'gemini') {
     const messageEl = document.createElement('div');
-    // Add role and provider class for dynamic color schemes
     messageEl.className = `message ${role} ${role === 'model' ? providerTheme : ''}`;
 
     const avatarEl = document.createElement('div');
@@ -380,6 +583,32 @@ function appendMessage(role, text, providerTheme = 'gemini') {
 
     bodyEl.appendChild(senderName);
     bodyEl.appendChild(contentEl);
+
+    // Add Speak button for Assistant responses
+    if (role === 'model') {
+        const actionsEl = document.createElement('div');
+        actionsEl.className = 'message-actions';
+        
+        const playBtn = document.createElement('button');
+        playBtn.className = 'tts-play-btn';
+        playBtn.title = "Écouter le message";
+        playBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+        
+        playBtn.addEventListener('click', () => {
+            speakText(text, playBtn);
+        });
+        
+        actionsEl.appendChild(playBtn);
+        bodyEl.appendChild(actionsEl);
+
+        // Autoplay if enabled and engine is on
+        if (autoplayEnabled && activeTtsEngine !== 'off') {
+            setTimeout(() => {
+                speakText(text, playBtn);
+            }, 100);
+        }
+    }
+
     messageEl.appendChild(avatarEl);
     messageEl.appendChild(bodyEl);
     
@@ -464,6 +693,9 @@ async function handleSendMessage(e) {
     welcomeScreen.style.display = 'none';
     clearChatBtn.style.display = 'block';
 
+    // Stop speaking current voice before generating new response
+    stopSpeaking();
+
     // Append User Message to UI
     appendMessage('user', text);
 
@@ -500,9 +732,8 @@ async function handleSendMessage(e) {
         const providerData = PROVIDERS[activeProvider];
 
         if (activeProvider === 'gemini') {
-            // Gemini Specific API structure
             const apiContents = conv.messages
-                .filter(m => m.provider === 'gemini' || m.role === 'user') // Keep context consistent
+                .filter(m => m.provider === 'gemini' || m.role === 'user')
                 .map(msg => ({
                     role: msg.role,
                     parts: msg.parts
@@ -530,7 +761,6 @@ async function handleSendMessage(e) {
             }
 
         } else {
-            // OpenAI Compatible APIs (Groq, OpenRouter, Mistral, Cohere v2)
             const openaiMessages = conv.messages.map(msg => ({
                 role: msg.role === 'model' ? 'assistant' : 'user',
                 content: msg.parts[0].text
@@ -541,7 +771,6 @@ async function handleSendMessage(e) {
                 'Authorization': `Bearer ${providerKey}`
             };
 
-            // Custom headers for OpenRouter requirement
             if (activeProvider === 'openrouter') {
                 headers['HTTP-Referer'] = window.location.origin;
                 headers['X-Title'] = 'Aurora Universal Chat';
