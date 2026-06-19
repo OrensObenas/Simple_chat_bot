@@ -33,44 +33,61 @@
                 <!-- Settings Panel -->
                 <div class="section-title">Configuration</div>
                 <div class="settings-card">
-                    <div class="input-group">
-                        <label for="provider-select">Fournisseur</label>
-                        <select id="provider-select">
-                            <option value="gemini" selected>Google Gemini</option>
-                            <option value="groq">Groq (Ultra-rapide)</option>
-                            <option value="openrouter">OpenRouter (Multi-IA)</option>
-                            <option value="mistral">Mistral AI (Français)</option>
-                            <option value="cohere">Cohere (RAG/Command)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="model-select">Modèle</label>
-                        <select id="model-select">
-                            <!-- Populated dynamically via app.js -->
-                        </select>
+                    <!-- Collapse for model settings -->
+                    <div class="accordion">
+                        <button class="accordion-trigger active" type="button" id="config-accordion-trigger">
+                            <span>⚙️ Modèle & Fournisseur</span>
+                            <i class="fa-solid fa-chevron-down" id="config-accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content" id="config-accordion-content" style="display: flex;">
+                            <div class="input-group">
+                                <label for="provider-select">Fournisseur</label>
+                                <select id="provider-select">
+                                    <option value="gemini" selected>Google Gemini</option>
+                                    <option value="groq">Groq (Ultra-rapide)</option>
+                                    <option value="openrouter">OpenRouter (Multi-IA)</option>
+                                    <option value="mistral">Mistral AI (Français)</option>
+                                    <option value="cohere">Cohere (RAG/Command)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="input-group">
+                                <label for="model-select">Modèle</label>
+                                <select id="model-select">
+                                    <!-- Populated dynamically via app.js -->
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Vocal Settings -->
-                    <div class="input-group">
-                        <label for="tts-engine-select">Moteur Vocal (TTS)</label>
-                        <select id="tts-engine-select">
-                            <option value="off" selected>Désactivé</option>
-                            <option value="browser">Navigateur (Gratuit)</option>
-                            <option value="elevenlabs">ElevenLabs (Premium)</option>
-                        </select>
-                    </div>
+                    <div class="accordion">
+                        <button class="accordion-trigger" type="button" id="vocal-accordion-trigger">
+                            <span>🔊 Configuration Vocale</span>
+                            <i class="fa-solid fa-chevron-down" id="vocal-accordion-icon"></i>
+                        </button>
+                        <div class="accordion-content" id="vocal-accordion-content" style="display: none;">
+                            <div class="input-group">
+                                <label for="tts-engine-select">Moteur Vocal (TTS)</label>
+                                <select id="tts-engine-select">
+                                    <option value="off" selected>Désactivé</option>
+                                    <option value="browser">Navigateur (Gratuit)</option>
+                                    <option value="elevenlabs">ElevenLabs (Premium)</option>
+                                </select>
+                            </div>
 
-                    <div id="voice-select-container" class="input-group" style="display: none;">
-                        <label for="tts-voice-select">Voix</label>
-                        <select id="tts-voice-select">
-                            <!-- Populated dynamically -->
-                        </select>
-                    </div>
+                            <div id="voice-select-container" class="input-group" style="display: none;">
+                                <label for="tts-voice-select">Voix</label>
+                                <select id="tts-voice-select">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
 
-                    <div id="autoplay-container" style="display: none; align-items: center; gap: 8px; margin-top: 5px;">
-                        <input type="checkbox" id="autoplay-checkbox" style="cursor: pointer; width: auto;">
-                        <label for="autoplay-checkbox" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none;">Lecture automatique</label>
+                            <div id="autoplay-container" style="display: none; align-items: center; gap: 8px; margin-top: 5px;">
+                                <input type="checkbox" id="autoplay-checkbox" style="cursor: pointer; width: auto;">
+                                <label for="autoplay-checkbox" style="font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none;">Lecture automatique</label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Manual API Keys Dropdown -->

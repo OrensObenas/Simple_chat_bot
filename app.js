@@ -74,6 +74,12 @@ const accordionTrigger = document.getElementById('accordion-trigger');
 const accordionContent = document.getElementById('accordion-content');
 const saveKeysBtn = document.getElementById('save-keys-btn');
 
+// New Accordions
+const configAccordionTrigger = document.getElementById('config-accordion-trigger');
+const configAccordionContent = document.getElementById('config-accordion-content');
+const vocalAccordionTrigger = document.getElementById('vocal-accordion-trigger');
+const vocalAccordionContent = document.getElementById('vocal-accordion-content');
+
 // Vocal Settings DOM Elements
 const ttsEngineSelect = document.getElementById('tts-engine-select');
 const voiceSelectContainer = document.getElementById('voice-select-container');
@@ -152,6 +158,20 @@ async function init() {
     autoplayCheckbox.addEventListener('change', (e) => {
         autoplayEnabled = e.target.checked;
         localStorage.setItem('autoplay_enabled', autoplayEnabled);
+    });
+
+    // Model Config Accordion Trigger
+    configAccordionTrigger.addEventListener('click', () => {
+        const isVisible = configAccordionContent.style.display !== 'none';
+        configAccordionContent.style.display = isVisible ? 'none' : 'flex';
+        configAccordionTrigger.classList.toggle('active', !isVisible);
+    });
+
+    // Vocal Config Accordion Trigger
+    vocalAccordionTrigger.addEventListener('click', () => {
+        const isVisible = vocalAccordionContent.style.display !== 'none';
+        vocalAccordionContent.style.display = isVisible ? 'none' : 'flex';
+        vocalAccordionTrigger.classList.toggle('active', !isVisible);
     });
 
     // Settings Accordion Trigger
