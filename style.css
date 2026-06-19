@@ -830,6 +830,106 @@ select option {
     color: #fca5a5;
 }
 
+/* Accordion Settings styling */
+.accordion {
+    border-top: 1px solid var(--border-color);
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.accordion-trigger {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 0;
+    transition: var(--transition-fast);
+}
+
+.accordion-trigger:hover {
+    color: var(--text-main);
+}
+
+.accordion-trigger i {
+    transition: transform var(--transition-normal);
+}
+
+.accordion-trigger.active i {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.input-group-sm {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.input-group-sm label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.input-group-sm input {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    outline: none;
+    width: 100%;
+    transition: var(--transition-fast);
+}
+
+.input-group-sm input:focus {
+    border-color: var(--border-color-focus);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Chat bubble brand theme variations */
+.message.model.gemini .message-avatar {
+    background: linear-gradient(135deg, #1a73e8 0%, #8ab4f8 100%);
+    box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+}
+
+.message.model.groq .message-avatar {
+    background: linear-gradient(135deg, #f97316 0%, #fdba74 100%);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+.message.model.openrouter .message-avatar {
+    background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+    box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+}
+
+.message.model.mistral .message-avatar {
+    background: linear-gradient(135deg, #ef4444 0%, #fca5a5 100%);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.message.model.cohere .message-avatar {
+    background: linear-gradient(135deg, #8b5cf6 0%, #c084fc 100%);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .app-container {

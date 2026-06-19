@@ -1,6 +1,61 @@
+// Providers and Models Database
+const PROVIDERS = {
+    gemini: {
+        name: "Google Gemini",
+        models: [
+            { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (Rapide)" },
+            { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash (Nouveau)" },
+            { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (Puissant)" },
+            { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" }
+        ],
+        defaultModel: "gemini-2.5-flash",
+        url: (model, key) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+    },
+    groq: {
+        name: "Groq",
+        models: [
+            { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B (Versatile)" },
+            { id: "llama-3.2-3b-preview", name: "Llama 3.2 3B" },
+            { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+            { id: "gemma2-9b-it", name: "Gemma 2 9B" }
+        ],
+        defaultModel: "llama-3.3-70b-versatile",
+        url: () => `https://api.groq.com/openai/v1/chat/completions`
+    },
+    openrouter: {
+        name: "OpenRouter",
+        models: [
+            { id: "google/gemini-2.5-flash:free", name: "Gemini 2.5 Flash (Free)" },
+            { id: "meta-llama/llama-3.2-3b-instruct:free", name: "Llama 3.2 3B (Free)" },
+            { id: "microsoft/phi-3-medium-128k-instruct:free", name: "Phi 3 Medium (Free)" },
+            { id: "deepseek/deepseek-chat", name: "DeepSeek Chat (V3)" }
+        ],
+        defaultModel: "google/gemini-2.5-flash:free",
+        url: () => `https://openrouter.ai/api/v1/chat/completions`
+    },
+    mistral: {
+        name: "Mistral AI",
+        models: [
+            { id: "mistral-large-latest", name: "Mistral Large" },
+            { id: "codestral-latest", name: "Codestral (Code)" },
+            { id: "mistral-nemo", name: "Mistral Nemo" }
+        ],
+        defaultModel: "mistral-large-latest",
+        url: () => `https://api.mistral.ai/v1/chat/completions`
+    },
+    cohere: {
+        name: "Cohere",
+        models: [
+            { id: "command-r-plus", name: "Command R+" },
+            { id: "command-r", name: "Command R" }
+        ],
+        defaultModel: "command-r-plus",
+        url: () => `https://api.cohere.com/v2/chat`
+    }
+};
+
 // DOM Elements
-const apiKeyInput = document.getElementById('api-key-input');
-const toggleKeyBtn = document.getElementById('toggle-key-visibility');
+const providerSelect = document.getElementById('provider-select');
 const modelSelect = document.getElementById('model-select');
 const newChatBtn = document.getElementById('new-chat-btn');
 const historyList = document.getElementById('history-list');
@@ -14,14 +69,26 @@ const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 
+// Accordion Settings Elements
+const accordionTrigger = document.getElementById('accordion-trigger');
+const accordionContent = document.getElementById('accordion-content');
+const saveKeysBtn = document.getElementById('save-keys-btn');
+
 // App State
-let apiKey = localStorage.getItem('gemini_api_key') || '';
-let currentModel = localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
+let activeProvider = localStorage.getItem('active_provider') || 'gemini';
+let activeModel = localStorage.getItem('active_model') || 'gemini-2.5-flash';
+let keys = {
+    gemini: '',
+    groq: '',
+    openrouter: '',
+    mistral: '',
+    cohere: ''
+};
 let conversations = JSON.parse(localStorage.getItem('gemini_conversations')) || [];
 let activeConversationId = localStorage.getItem('gemini_active_conv_id') || null;
 
 // Initialization
-function init() {
+async function init() {
     // Configure marked to handle line breaks (like in a chat)
     if (typeof marked !== 'undefined') {
         marked.use({
@@ -30,32 +97,48 @@ function init() {
         });
     }
 
-    // Populate API Key and Model from state
-    apiKeyInput.value = apiKey;
-    modelSelect.value = currentModel;
-    updateBadge();
+    // Set active provider
+    providerSelect.value = activeProvider;
+    
+    // Load config from Express API (.env) or localStorage
+    await loadConfig();
 
-    // Setup input listeners
-    apiKeyInput.addEventListener('input', (e) => {
-        apiKey = e.target.value.trim();
-        localStorage.setItem('gemini_api_key', apiKey);
+    // Populate models select and badge
+    populateModels(activeProvider, activeModel);
+
+    // Event listener: change provider
+    providerSelect.addEventListener('change', (e) => {
+        activeProvider = e.target.value;
+        localStorage.setItem('active_provider', activeProvider);
+        activeModel = PROVIDERS[activeProvider].defaultModel;
+        localStorage.setItem('active_model', activeModel);
+        populateModels(activeProvider);
     });
 
-    toggleKeyBtn.addEventListener('click', () => {
-        const type = apiKeyInput.type === 'password' ? 'text' : 'password';
-        apiKeyInput.type = type;
-        const icon = toggleKeyBtn.querySelector('i');
-        if (type === 'password') {
-            icon.className = 'fa-solid fa-eye-slash';
-        } else {
-            icon.className = 'fa-solid fa-eye';
-        }
-    });
-
+    // Event listener: change model
     modelSelect.addEventListener('change', (e) => {
-        currentModel = e.target.value;
-        localStorage.setItem('gemini_model', currentModel);
+        activeModel = e.target.value;
+        localStorage.setItem('active_model', activeModel);
         updateBadge();
+    });
+
+    // Settings Accordion Trigger
+    accordionTrigger.addEventListener('click', () => {
+        const isVisible = accordionContent.style.display !== 'none';
+        accordionContent.style.display = isVisible ? 'none' : 'flex';
+        accordionTrigger.classList.toggle('active', !isVisible);
+    });
+
+    // Save Manual Keys Locally
+    saveKeysBtn.addEventListener('click', () => {
+        Object.keys(keys).forEach(provider => {
+            const inputVal = document.getElementById(`key-${provider}`).value.trim();
+            if (inputVal) {
+                keys[provider] = inputVal;
+                localStorage.setItem(`key_${provider}`, inputVal);
+            }
+        });
+        alert("Clés de secours enregistrées avec succès dans le stockage local !");
     });
 
     // Auto-growing textarea
@@ -102,9 +185,63 @@ function init() {
     }
 }
 
-// Update the active model display badge
+// Load configurations keys from express server (/api/config) or fallback to localStorage
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const serverConfig = await response.json();
+            Object.keys(keys).forEach(provider => {
+                // Precedence: .env config (serverConfig) -> LocalStorage backup
+                keys[provider] = serverConfig[provider] || localStorage.getItem(`key_${provider}`) || '';
+                if (keys[provider]) {
+                    document.getElementById(`key-${provider}`).value = keys[provider];
+                }
+            });
+            console.log("Config keys loaded successfully from local Node server environment.");
+        } else {
+            throw new Error();
+        }
+    } catch (e) {
+        console.log("Running in static filesystem mode (no local Express server). Loading keys from localStorage.");
+        Object.keys(keys).forEach(provider => {
+            keys[provider] = localStorage.getItem(`key_${provider}`) || '';
+            if (keys[provider]) {
+                document.getElementById(`key-${provider}`).value = keys[provider];
+            }
+        });
+    }
+}
+
+// Populate Models Select Dropdown
+function populateModels(provider, selectedModelId = null) {
+    modelSelect.innerHTML = '';
+    const providerData = PROVIDERS[provider];
+    
+    providerData.models.forEach(model => {
+        const opt = document.createElement('option');
+        opt.value = model.id;
+        opt.textContent = model.name;
+        if (selectedModelId === model.id || (!selectedModelId && model.id === providerData.defaultModel)) {
+            opt.selected = true;
+            activeModel = model.id;
+        }
+        modelSelect.appendChild(opt);
+    });
+    
+    updateBadge();
+}
+
+// Update the active model display badge and status
 function updateBadge() {
-    badgeModelName.textContent = modelSelect.options[modelSelect.selectedIndex].text.split(' (')[0];
+    const activeProviderName = PROVIDERS[activeProvider].name;
+    const modelText = modelSelect.options[modelSelect.selectedIndex]?.text || activeModel;
+    badgeModelName.textContent = `${activeProviderName} : ${modelText.split(' (')[0]}`;
+    
+    // Status dot color update
+    const statusDot = activeModelBadge.querySelector('.status-dot');
+    statusDot.className = 'status-dot';
+    statusDot.classList.add('green');
 }
 
 // Conversation Management
@@ -117,7 +254,6 @@ function startNewChat() {
     messagesContainer.appendChild(welcomeScreen);
     welcomeScreen.style.display = 'flex';
     
-    // Enable/disable clear button
     clearChatBtn.style.display = 'none';
     chatInput.focus();
 }
@@ -196,7 +332,7 @@ function loadConversation(id) {
     clearChatBtn.style.display = 'block';
 
     conv.messages.forEach(msg => {
-        appendMessage(msg.role, msg.parts[0].text);
+        appendMessage(msg.role, msg.parts[0].text, msg.provider || 'gemini');
     });
 
     renderConversationsList();
@@ -204,9 +340,10 @@ function loadConversation(id) {
 }
 
 // Message Rendering and Formatting
-function appendMessage(role, text) {
+function appendMessage(role, text, providerTheme = 'gemini') {
     const messageEl = document.createElement('div');
-    messageEl.className = `message ${role}`;
+    // Add role and provider class for dynamic color schemes
+    messageEl.className = `message ${role} ${role === 'model' ? providerTheme : ''}`;
 
     const avatarEl = document.createElement('div');
     avatarEl.className = 'message-avatar';
@@ -222,13 +359,19 @@ function appendMessage(role, text) {
 
     const senderName = document.createElement('div');
     senderName.className = 'message-sender-name';
-    senderName.textContent = role === 'user' ? 'Vous' : 'Gemini';
+    
+    if (role === 'user') {
+        senderName.textContent = 'Vous';
+    } else {
+        const provName = PROVIDERS[providerTheme]?.name || 'IA';
+        senderName.textContent = provName;
+    }
 
     const contentEl = document.createElement('div');
     contentEl.className = 'message-content';
     contentEl.innerHTML = formatMarkdown(text);
 
-    // Apply syntax highlighting
+    // Apply code syntax highlighting
     if (typeof hljs !== 'undefined') {
         contentEl.querySelectorAll('pre code').forEach((block) => {
             hljs.highlightElement(block);
@@ -247,7 +390,7 @@ function appendMessage(role, text) {
 
 function appendLoadingIndicator() {
     const messageEl = document.createElement('div');
-    messageEl.className = 'message model loading';
+    messageEl.className = `message model loading ${activeProvider}`;
 
     const avatarEl = document.createElement('div');
     avatarEl.className = 'message-avatar';
@@ -258,7 +401,7 @@ function appendLoadingIndicator() {
 
     const senderName = document.createElement('div');
     senderName.className = 'message-sender-name';
-    senderName.textContent = 'Gemini';
+    senderName.textContent = PROVIDERS[activeProvider].name;
 
     const contentEl = document.createElement('div');
     contentEl.className = 'message-content';
@@ -303,15 +446,17 @@ function formatMarkdown(text) {
                .split('\n').join('<br>');
 }
 
-// API Integration
+// API Integration Handler
 async function handleSendMessage(e) {
     e.preventDefault();
 
     const text = chatInput.value.trim();
     if (!text) return;
 
-    if (!apiKey) {
-        alert("Veuillez saisir votre clé API Gemini dans la barre latérale.");
+    // Get Active API Key
+    const providerKey = keys[activeProvider];
+    if (!providerKey) {
+        alert(`Veuillez configurer la clé API pour ${PROVIDERS[activeProvider].name} dans les paramètres.`);
         return;
     }
 
@@ -338,67 +483,111 @@ async function handleSendMessage(e) {
         conversations.unshift(conv); // Add to beginning of history
     }
 
-    // Push User message to state
+    // Push User message to local state
     conv.messages.push({
         role: 'user',
-        parts: [{ text: text }]
+        parts: [{ text: text }],
+        provider: activeProvider
     });
     saveConversations();
     renderConversationsList();
 
-    // Show loading indicator
+    // Show pulsing loading indicator
     const loadingMessage = appendLoadingIndicator();
 
-    // Prepare API call payload
-    // Filter history to ensure structure matches exactly what Gemini expects
-    const apiContents = conv.messages.map(msg => ({
-        role: msg.role,
-        parts: msg.parts
-    }));
-
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                contents: apiContents
-            })
-        });
+        let response;
+        const providerData = PROVIDERS[activeProvider];
 
-        // Remove loading indicator
-        loadingMessage.remove();
+        if (activeProvider === 'gemini') {
+            // Gemini Specific API structure
+            const apiContents = conv.messages
+                .filter(m => m.provider === 'gemini' || m.role === 'user') // Keep context consistent
+                .map(msg => ({
+                    role: msg.role,
+                    parts: msg.parts
+                }));
 
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            const errMsg = errData.error?.message || `Erreur serveur (${response.status})`;
-            appendMessage('model', `**Erreur de l'API Gemini :**\n${errMsg}`);
-            return;
-        }
-
-        const data = await response.json();
-        
-        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-            const replyText = data.candidates[0].content.parts[0].text;
-            
-            // Push Model reply to state
-            conv.messages.push({
-                role: 'model',
-                parts: [{ text: replyText }]
+            response = await fetch(providerData.url(activeModel, providerKey), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: apiContents })
             });
-            saveConversations();
-            
-            // Render Model reply in UI
-            appendMessage('model', replyText);
+
+            loadingMessage.remove();
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Erreur serveur (${response.status})`);
+            }
+
+            const data = await response.json();
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                const replyText = data.candidates[0].content.parts[0].text;
+                saveAndDisplayReply(conv, replyText);
+            } else {
+                throw new Error("Aucune réponse générée par Gemini.");
+            }
+
         } else {
-            appendMessage('model', "**Erreur :** Aucune réponse générée par le modèle. Veuillez vérifier le statut de votre compte.");
+            // OpenAI Compatible APIs (Groq, OpenRouter, Mistral, Cohere v2)
+            const openaiMessages = conv.messages.map(msg => ({
+                role: msg.role === 'model' ? 'assistant' : 'user',
+                content: msg.parts[0].text
+            }));
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${providerKey}`
+            };
+
+            // Custom headers for OpenRouter requirement
+            if (activeProvider === 'openrouter') {
+                headers['HTTP-Referer'] = window.location.origin;
+                headers['X-Title'] = 'Aurora Universal Chat';
+            }
+
+            response = await fetch(providerData.url(), {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    model: activeModel,
+                    messages: openaiMessages
+                })
+            });
+
+            loadingMessage.remove();
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.error?.message || errData.message || `Erreur serveur (${response.status})`;
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            if (data.choices?.[0]?.message?.content) {
+                const replyText = data.choices[0].message.content;
+                saveAndDisplayReply(conv, replyText);
+            } else {
+                throw new Error("Aucune réponse renvoyée par le modèle.");
+            }
         }
 
     } catch (err) {
         loadingMessage.remove();
-        appendMessage('model', `**Erreur réseau :** Impossible de contacter l'API Gemini. Veuillez vérifier votre connexion Internet.\n\nDétails : ${err.message}`);
+        appendMessage('model', `**Erreur (${PROVIDERS[activeProvider].name}) :** ${err.message}`, activeProvider);
     }
+}
+
+// Save message response to state and render it
+function saveAndDisplayReply(conv, text) {
+    conv.messages.push({
+        role: 'model',
+        parts: [{ text: text }],
+        provider: activeProvider
+    });
+    saveConversations();
+    appendMessage('model', text, activeProvider);
 }
 
 // Start the app

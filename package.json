@@ -1,0 +1,25 @@
+{
+  "name": "aurora-universal-chat",
+  "version": "1.1.0",
+  "description": "Un client de chat web universel pour Gemini, Groq, OpenRouter, Mistral et Cohere.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "keywords": [
+    "chat",
+    "gemini",
+    "groq",
+    "openrouter",
+    "mistral",
+    "cohere",
+    "ai",
+    "webrtc"
+  ],
+  "author": "Orens Obenas",
+  "license": "MIT"
+}
