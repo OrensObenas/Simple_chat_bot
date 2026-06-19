@@ -538,7 +538,7 @@ function loadConversation(id) {
     clearChatBtn.style.display = 'block';
 
     conv.messages.forEach(msg => {
-        appendMessage(msg.role, msg.parts[0].text, msg.provider || 'gemini');
+        appendMessage(msg.role, msg.parts[0].text, msg.provider || 'gemini', false);
     });
 
     renderConversationsList();
@@ -546,7 +546,7 @@ function loadConversation(id) {
 }
 
 // Message Rendering and Formatting
-function appendMessage(role, text, providerTheme = 'gemini') {
+function appendMessage(role, text, providerTheme = 'gemini', shouldAutoplay = true) {
     const messageEl = document.createElement('div');
     messageEl.className = `message ${role} ${role === 'model' ? providerTheme : ''}`;
 
@@ -603,8 +603,8 @@ function appendMessage(role, text, providerTheme = 'gemini') {
         actionsEl.appendChild(playBtn);
         bodyEl.appendChild(actionsEl);
 
-        // Autoplay if enabled and engine is on
-        if (autoplayEnabled && activeTtsEngine !== 'off') {
+        // Autoplay if enabled, engine is on, and shouldAutoplay is true
+        if (shouldAutoplay && autoplayEnabled && activeTtsEngine !== 'off') {
             setTimeout(() => {
                 speakText(text, playBtn);
             }, 100);
