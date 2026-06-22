@@ -1017,6 +1017,183 @@ select option {
     100% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.6); }
 }
 
+/* Voice Call Overlay Mode */
+.voice-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(10, 11, 16, 0.85);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn var(--transition-normal);
+}
+
+.voice-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+}
+
+.voice-avatar-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin-bottom: 30px;
+}
+
+.voice-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: white;
+    z-index: 2;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+}
+
+.voice-avatar-glow {
+    position: absolute;
+    top: -5px;
+    left: -5px;
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    filter: blur(20px);
+    opacity: 0.5;
+    z-index: 1;
+}
+
+/* Animations for speaking states */
+.voice-overlay.speaking-user .voice-avatar {
+    animation: bounceScale 0.6s infinite alternate ease-in-out;
+}
+
+.voice-overlay.speaking-model .voice-avatar {
+    animation: bounceScale 0.4s infinite alternate ease-in-out;
+}
+
+@keyframes bounceScale {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.08); }
+}
+
+#voice-status-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff 40%, var(--text-muted) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#voice-status-desc {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 50px;
+    height: 20px;
+}
+
+/* Sonar Wave Animation */
+.sonar-wave-container {
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 0;
+    top: -65px;
+    pointer-events: none;
+}
+
+.sonar-wave {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.2);
+    opacity: 0;
+    transform: scale(1);
+}
+
+/* Active sonar animation styles when speaking */
+.voice-overlay.active-audio .sonar-wave.wave1 {
+    animation: sonarEffect 2s infinite linear;
+}
+.voice-overlay.active-audio .sonar-wave.wave2 {
+    animation: sonarEffect 2s infinite linear 0.6s;
+}
+.voice-overlay.active-audio .sonar-wave.wave3 {
+    animation: sonarEffect 2s infinite linear 1.2s;
+}
+
+/* Fast sonar animation when model is speaking */
+.voice-overlay.speaking-model .sonar-wave {
+    background: rgba(99, 102, 241, 0.25);
+}
+
+@keyframes sonarEffect {
+    0% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2.2);
+    }
+}
+
+/* Hang up Button */
+.hangup-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #ef4444;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    transition: var(--transition-fast);
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+    z-index: 5;
+}
+
+.hangup-btn:hover {
+    transform: scale(1.1);
+    background: #dc2626;
+    box-shadow: 0 12px 30px rgba(239, 68, 68, 0.6);
+}
+
+.hangup-btn:active {
+    transform: scale(0.95);
+}
+
+/* Header voice mode button active color */
+#voice-call-btn.active {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .app-container {

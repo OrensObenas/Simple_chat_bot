@@ -167,6 +167,9 @@
                     </div>
                 </div>
                 <div class="header-actions">
+                    <button id="voice-call-btn" class="icon-btn-secondary" title="Démarrer un appel vocal" type="button" style="margin-right: 10px;">
+                        <i class="fa-solid fa-phone"></i>
+                    </button>
                     <button id="clear-chat-btn" class="icon-btn-secondary" title="Effacer la conversation actuelle" type="button">
                         <i class="fa-regular fa-trash-can"></i>
                     </button>
@@ -224,6 +227,32 @@
                 </form>
             </footer>
         </main>
+    </div>
+
+    <!-- Voice Call Overlay -->
+    <div class="voice-overlay" id="voice-overlay" style="display: none;">
+        <div class="voice-overlay-content">
+            <div class="voice-avatar-container">
+                <div class="voice-avatar-glow"></div>
+                <div class="voice-avatar" id="voice-avatar">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+            </div>
+            
+            <h2 id="voice-status-title">Appel en cours...</h2>
+            <p id="voice-status-desc">Initialisation du microphone...</p>
+            
+            <!-- Sonar wave visualization -->
+            <div class="sonar-wave-container" id="sonar-wave-container">
+                <div class="sonar-wave wave1"></div>
+                <div class="sonar-wave wave2"></div>
+                <div class="sonar-wave wave3"></div>
+            </div>
+            
+            <button id="hangup-btn" class="hangup-btn" title="Raccrocher" type="button">
+                <i class="fa-solid fa-phone-slash"></i>
+            </button>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>

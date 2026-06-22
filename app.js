@@ -89,6 +89,16 @@ const autoplayCheckbox = document.getElementById('autoplay-checkbox');
 const sttEngineSelect = document.getElementById('stt-engine-select');
 const micBtn = document.getElementById('mic-btn');
 
+// Voice Call DOM Elements
+const voiceCallBtn = document.getElementById('voice-call-btn');
+const voiceOverlay = document.getElementById('voice-overlay');
+const hangupBtn = document.getElementById('hangup-btn');
+const voiceStatusTitle = document.getElementById('voice-status-title');
+const voiceStatusDesc = document.getElementById('voice-status-desc');
+
+// Voice Call State
+let isVoiceModeActive = false;
+
 // App State
 let activeProvider = localStorage.getItem('active_provider') || 'gemini';
 let activeModel = localStorage.getItem('active_model') || 'gemini-2.5-flash';
@@ -181,6 +191,10 @@ async function init() {
 
     // Initialize Speech Recognition
     initSpeechRecognition();
+
+    // Voice Call Session Handlers
+    voiceCallBtn.addEventListener('click', startVoiceMode);
+    hangupBtn.addEventListener('click', stopVoiceMode);
 
     // Model Config Accordion Trigger
     configAccordionTrigger.addEventListener('click', () => {
@@ -414,7 +428,7 @@ function stopSpeaking() {
 }
 
 // Read text out loud using selected vocal engine and active voice
-async function speakText(text, playButton) {
+async function speakText(text, playButton, onEndCallback = null) {
     if (playButton.classList.contains('playing')) {
         stopSpeaking();
         return;
@@ -435,6 +449,7 @@ async function speakText(text, playButton) {
         if (!window.speechSynthesis) {
             alert("La synthèse vocale du navigateur n'est pas prise en charge.");
             stopSpeaking();
+            if (onEndCallback) onEndCallback();
             return;
         }
 
@@ -444,8 +459,14 @@ async function speakText(text, playButton) {
             currentSpeechUtterance.voice = voice;
         }
 
-        currentSpeechUtterance.onend = () => stopSpeaking();
-        currentSpeechUtterance.onerror = () => stopSpeaking();
+        currentSpeechUtterance.onend = () => {
+            stopSpeaking();
+            if (onEndCallback) onEndCallback();
+        };
+        currentSpeechUtterance.onerror = () => {
+            stopSpeaking();
+            if (onEndCallback) onEndCallback();
+        };
         window.speechSynthesis.speak(currentSpeechUtterance);
 
     } else if (activeTtsEngine === 'elevenlabs') {
@@ -453,6 +474,7 @@ async function speakText(text, playButton) {
         if (!elKey) {
             alert("Veuillez configurer votre clé API ElevenLabs dans la section paramètres.");
             stopSpeaking();
+            if (onEndCallback) onEndCallback();
             return;
         }
 
@@ -481,13 +503,20 @@ async function speakText(text, playButton) {
             const blob = await response.blob();
             const audioUrl = URL.createObjectURL(blob);
             currentAudio = new Audio(audioUrl);
-            currentAudio.onended = () => stopSpeaking();
-            currentAudio.onerror = () => stopSpeaking();
+            currentAudio.onended = () => {
+                stopSpeaking();
+                if (onEndCallback) onEndCallback();
+            };
+            currentAudio.onerror = () => {
+                stopSpeaking();
+                if (onEndCallback) onEndCallback();
+            };
             currentAudio.play();
 
         } catch (e) {
             alert("Erreur de synthèse ElevenLabs : " + e.message);
             stopSpeaking();
+            if (onEndCallback) onEndCallback();
         }
     }
 }
@@ -880,32 +909,60 @@ function initSpeechRecognition() {
 
     recognition.onstart = () => {
         isRecording = true;
-        micBtn.classList.add('recording');
-        micBtn.title = "En écoute... Cliquez pour arrêter";
-        chatInput.placeholder = "Parlez maintenant...";
+        if (isVoiceModeActive) {
+            voiceOverlay.classList.add('active-audio', 'speaking-user');
+            voiceOverlay.classList.remove('speaking-model');
+            voiceStatusTitle.textContent = "Je vous écoute...";
+            voiceStatusDesc.textContent = "Parlez maintenant...";
+        } else {
+            micBtn.classList.add('recording');
+            micBtn.title = "En écoute... Cliquez pour arrêter";
+            chatInput.placeholder = "Parlez maintenant...";
+        }
     };
 
     recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
-            const currentVal = chatInput.value.trim();
-            chatInput.value = currentVal ? `${currentVal} ${transcript}` : transcript;
-            chatInput.dispatchEvent(new Event('input'));
+            if (isVoiceModeActive) {
+                sendVoiceModeMessage(transcript);
+            } else {
+                const currentVal = chatInput.value.trim();
+                chatInput.value = currentVal ? `${currentVal} ${transcript}` : transcript;
+                chatInput.dispatchEvent(new Event('input'));
+            }
         }
     };
 
     recognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error);
-        if (event.error !== 'no-speech') {
-            alert("Erreur de reconnaissance vocale : " + event.error);
+        if (isVoiceModeActive) {
+            if (event.error === 'no-speech') {
+                setTimeout(() => {
+                    if (isVoiceModeActive) startVoiceModeListening();
+                }, 300);
+            } else if (event.error !== 'aborted') {
+                voiceStatusDesc.textContent = `Erreur : ${event.error}. Réessai...`;
+                setTimeout(() => {
+                    if (isVoiceModeActive) startVoiceModeListening();
+                }, 1500);
+            }
+        } else {
+            if (event.error !== 'no-speech') {
+                alert("Erreur de reconnaissance vocale : " + event.error);
+            }
+            stopSpeaking();
+            resetMicButton();
         }
-        stopSpeaking();
-        resetMicButton();
     };
 
     recognition.onend = () => {
         isRecording = false;
-        resetMicButton();
+        if (isVoiceModeActive) {
+            voiceOverlay.classList.remove('active-audio', 'speaking-user');
+        } else {
+            resetMicButton();
+        }
     };
 }
 
@@ -1047,6 +1104,231 @@ async function sendAudioToGroq(audioBlob) {
     } finally {
         resetMicButton();
     }
+}
+
+// Voice Mode S2S Loop Functions
+function startVoiceMode() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("La reconnaissance vocale (Speech-to-Text) n'est pas supportée par votre navigateur. Veuillez utiliser Google Chrome ou Microsoft Edge.");
+        return;
+    }
+
+    isVoiceModeActive = true;
+    voiceCallBtn.classList.add('active');
+    
+    // Stop any active recordings or TTS playback
+    stopSpeaking();
+    if (isRecording) {
+        if (activeSttEngine === 'browser') {
+            if (recognition) recognition.stop();
+        } else if (activeSttEngine === 'groq') {
+            stopGroqRecording();
+        }
+    }
+
+    // Force TTS engine to browser if currently off
+    if (activeTtsEngine === 'off') {
+        activeTtsEngine = 'browser';
+        ttsEngineSelect.value = 'browser';
+        localStorage.setItem('active_tts_engine', 'browser');
+        handleTtsEngineChange();
+    }
+
+    // Display fullscreen overlay
+    voiceOverlay.style.display = 'flex';
+    voiceOverlay.className = 'voice-overlay'; // clear state classes
+    voiceStatusTitle.textContent = "Appel en cours...";
+    voiceStatusDesc.textContent = "Initialisation du microphone...";
+
+    // Start listening
+    startVoiceModeListening();
+}
+
+function startVoiceModeListening() {
+    if (!isVoiceModeActive) return;
+
+    stopSpeaking();
+
+    // Prepare overlay UI classes
+    voiceOverlay.className = 'voice-overlay active-audio speaking-user';
+    voiceStatusTitle.textContent = "Je vous écoute...";
+    voiceStatusDesc.textContent = "Parlez maintenant...";
+
+    if (recognition) {
+        try {
+            recognition.stop();
+        } catch (e) {}
+        
+        setTimeout(() => {
+            if (!isVoiceModeActive) return;
+            try {
+                recognition.start();
+            } catch (e) {
+                console.log("Speech recognition start failed (likely already running):", e.message);
+            }
+        }, 150);
+    }
+}
+
+async function sendVoiceModeMessage(text) {
+    if (!isVoiceModeActive) return;
+
+    const providerKey = keys[activeProvider];
+    if (!providerKey) {
+        alert(`Veuillez configurer la clé API pour ${PROVIDERS[activeProvider].name} dans les paramètres.`);
+        stopVoiceMode();
+        return;
+    }
+
+    // UI Updates
+    voiceOverlay.className = 'voice-overlay active-audio';
+    voiceStatusTitle.textContent = "IA réfléchit...";
+    voiceStatusDesc.textContent = `Envoi à ${PROVIDERS[activeProvider].name}...`;
+
+    welcomeScreen.style.display = 'none';
+    clearChatBtn.style.display = 'block';
+
+    stopSpeaking();
+    appendMessage('user', text);
+
+    let conv = conversations.find(c => c.id === activeConversationId);
+    if (!conv) {
+        conv = {
+            id: activeConversationId,
+            title: text.length > 25 ? text.substring(0, 25) + '...' : text,
+            messages: []
+        };
+        conversations.unshift(conv);
+    }
+
+    conv.messages.push({
+        role: 'user',
+        parts: [{ text: text }],
+        provider: activeProvider
+    });
+    saveConversations();
+    renderConversationsList();
+
+    try {
+        let response;
+        const providerData = PROVIDERS[activeProvider];
+
+        if (activeProvider === 'gemini') {
+            const apiContents = conv.messages
+                .filter(m => m.provider === 'gemini' || m.role === 'user')
+                .map(msg => ({
+                    role: msg.role,
+                    parts: msg.parts
+                }));
+
+            response = await fetch(providerData.url(activeModel, providerKey), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: apiContents })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Erreur serveur (${response.status})`);
+            }
+
+            const data = await response.json();
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                const replyText = data.candidates[0].content.parts[0].text;
+                handleVoiceModeReply(conv, replyText);
+            } else {
+                throw new Error("Aucune réponse générée par Gemini.");
+            }
+
+        } else {
+            const openaiMessages = conv.messages.map(msg => ({
+                role: msg.role === 'model' ? 'assistant' : 'user',
+                content: msg.parts[0].text
+            }));
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${providerKey}`
+            };
+
+            if (activeProvider === 'openrouter') {
+                headers['HTTP-Referer'] = window.location.origin;
+                headers['X-Title'] = 'Aurora Universal Chat';
+            }
+
+            response = await fetch(providerData.url(), {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    model: activeModel,
+                    messages: openaiMessages
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.error?.message || errData.message || `Erreur serveur (${response.status})`;
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            if (data.choices?.[0]?.message?.content) {
+                const replyText = data.choices[0].message.content;
+                handleVoiceModeReply(conv, replyText);
+            } else {
+                throw new Error("Aucune réponse renvoyée par le modèle.");
+            }
+        }
+
+    } catch (err) {
+        console.error("API error in Voice Mode:", err);
+        appendMessage('model', `**Erreur (${PROVIDERS[activeProvider].name}) :** ${err.message}`, activeProvider);
+        voiceOverlay.className = 'voice-overlay active-audio';
+        voiceStatusTitle.textContent = "Erreur de connexion";
+        voiceStatusDesc.textContent = err.message;
+        setTimeout(() => {
+            if (isVoiceModeActive) startVoiceModeListening();
+        }, 3000);
+    }
+}
+
+function handleVoiceModeReply(conv, replyText) {
+    if (!isVoiceModeActive) return;
+
+    conv.messages.push({
+        role: 'model',
+        parts: [{ text: replyText }],
+        provider: activeProvider
+    });
+    saveConversations();
+
+    const messageEl = appendMessage('model', replyText, activeProvider, false);
+    const playBtn = messageEl.querySelector('.tts-play-btn');
+
+    voiceOverlay.className = 'voice-overlay active-audio speaking-model';
+    voiceStatusTitle.textContent = "L'IA vous répond...";
+    voiceStatusDesc.textContent = "Lecture vocale...";
+
+    speakText(replyText, playBtn, () => {
+        if (isVoiceModeActive) {
+            voiceOverlay.classList.remove('speaking-model', 'active-audio');
+            setTimeout(startVoiceModeListening, 800);
+        }
+    });
+}
+
+function stopVoiceMode() {
+    isVoiceModeActive = false;
+    voiceCallBtn.classList.remove('active');
+    voiceOverlay.style.display = 'none';
+    
+    if (recognition) {
+        try {
+            recognition.stop();
+        } catch (e) {}
+    }
+    stopSpeaking();
 }
 
 // Start the app
