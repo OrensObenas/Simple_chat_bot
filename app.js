@@ -92,6 +92,7 @@ const micBtn = document.getElementById('mic-btn');
 // Voice Call DOM Elements
 const voiceCallBtn = document.getElementById('voice-call-btn');
 const voiceOverlay = document.getElementById('voice-overlay');
+const voiceAvatar = document.getElementById('voice-avatar');
 const hangupBtn = document.getElementById('hangup-btn');
 const voiceStatusTitle = document.getElementById('voice-status-title');
 const voiceStatusDesc = document.getElementById('voice-status-desc');
@@ -194,6 +195,7 @@ async function init() {
 
     // Voice Call Session Handlers
     voiceCallBtn.addEventListener('click', startVoiceMode);
+    voiceAvatar.addEventListener('click', handleVoiceAvatarClick);
     hangupBtn.addEventListener('click', stopVoiceMode);
 
     // Model Config Accordion Trigger
@@ -1117,9 +1119,14 @@ async function sendAudioToGroq(audioBlob) {
 
 // Voice Mode S2S Loop Functions
 function startVoiceMode() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert("La reconnaissance vocale (Speech-to-Text) n'est pas supportée par votre navigateur. Veuillez utiliser Google Chrome ou Microsoft Edge.");
+    if (activeSttEngine === 'browser') {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("La reconnaissance vocale (Speech-to-Text) n'est pas supportée par votre navigateur. Veuillez passer au moteur Groq Whisper dans les paramètres.");
+            return;
+        }
+    } else if (activeSttEngine === 'groq' && !keys.groq) {
+        alert("Veuillez d'abord configurer votre clé API Groq dans la barre latérale pour utiliser Whisper.");
         return;
     }
 
@@ -1159,24 +1166,146 @@ function startVoiceModeListening() {
 
     stopSpeaking();
 
-    // Prepare overlay UI classes
-    voiceOverlay.className = 'voice-overlay active-audio speaking-user';
-    voiceStatusTitle.textContent = "Je vous écoute...";
-    voiceStatusDesc.textContent = "Parlez maintenant...";
+    if (activeSttEngine === 'browser') {
+        // Prepare overlay UI classes
+        voiceOverlay.className = 'voice-overlay active-audio speaking-user';
+        voiceStatusTitle.textContent = "Je vous écoute...";
+        voiceStatusDesc.textContent = "Parlez maintenant...";
 
-    if (recognition) {
-        try {
-            recognition.stop();
-        } catch (e) {}
-        
-        setTimeout(() => {
-            if (!isVoiceModeActive) return;
+        if (recognition) {
             try {
-                recognition.start();
-            } catch (e) {
-                console.log("Speech recognition start failed (likely already running):", e.message);
+                recognition.stop();
+            } catch (e) {}
+            
+            setTimeout(() => {
+                if (!isVoiceModeActive) return;
+                try {
+                    recognition.start();
+                } catch (e) {
+                    console.log("Speech recognition start failed (likely already running):", e.message);
+                }
+            }, 150);
+        }
+    } else {
+        // Groq Whisper click-to-speak mode
+        voiceOverlay.className = 'voice-overlay clickable-avatar';
+        voiceStatusTitle.textContent = "Prêt à vous écouter";
+        voiceStatusDesc.textContent = "Cliquez sur l'avatar pour parler...";
+    }
+}
+
+async function handleVoiceAvatarClick() {
+    if (!isVoiceModeActive) return;
+    
+    if (activeSttEngine !== 'groq') {
+        // In browser mode, clicking can manually trigger stop/send if recording
+        if (isRecording && recognition) {
+            recognition.stop();
+        }
+        return;
+    }
+
+    // Groq Whisper mode click handling
+    if (!isRecording) {
+        // Start recording
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunks = [];
+
+            let options = { mimeType: 'audio/webm' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'audio/ogg' };
             }
-        }, 150);
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = {};
+            }
+
+            mediaRecorder = new MediaRecorder(stream, options);
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstart = () => {
+                isRecording = true;
+                voiceOverlay.className = 'voice-overlay active-audio speaking-user clickable-avatar';
+                voiceStatusTitle.textContent = "Je vous écoute...";
+                voiceStatusDesc.textContent = "Cliquez sur l'avatar pour terminer et envoyer";
+            };
+
+            mediaRecorder.onstop = async () => {
+                isRecording = false;
+                stream.getTracks().forEach(track => track.stop());
+
+                const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+
+                voiceOverlay.className = 'voice-overlay active-audio';
+                voiceStatusTitle.textContent = "Transcription...";
+                voiceStatusDesc.textContent = "Envoi à Groq Whisper...";
+
+                await sendVoiceModeAudioToGroq(audioBlob);
+            };
+
+            mediaRecorder.start();
+
+        } catch (err) {
+            console.error("Microphone access denied or error:", err);
+            alert("Impossible d'accéder au microphone. Veuillez vérifier vos autorisations.");
+            startVoiceModeListening();
+        }
+    } else {
+        // Stop recording and trigger sending
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+    }
+}
+
+async function sendVoiceModeAudioToGroq(audioBlob) {
+    if (!isVoiceModeActive) return;
+
+    const groqKey = keys.groq;
+    if (!groqKey) {
+        alert("Clé Groq manquante.");
+        startVoiceModeListening();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'speech.webm');
+    formData.append('model', 'whisper-large-v3');
+    formData.append('language', 'fr');
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqKey}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const errMsg = errData.error?.message || `Erreur Whisper (${response.status})`;
+            throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        if (data.text && data.text.trim()) {
+            sendVoiceModeMessage(data.text.trim());
+        } else {
+            throw new Error("Aucun texte détecté dans l'enregistrement.");
+        }
+    } catch (e) {
+        console.error("Groq Whisper API error in voice mode:", e);
+        voiceStatusTitle.textContent = "Erreur de transcription";
+        voiceStatusDesc.textContent = e.message;
+        setTimeout(() => {
+            if (isVoiceModeActive) startVoiceModeListening();
+        }, 3000);
     }
 }
 
@@ -1335,6 +1464,11 @@ function stopVoiceMode() {
     if (recognition) {
         try {
             recognition.stop();
+        } catch (e) {}
+    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        try {
+            mediaRecorder.stop();
         } catch (e) {}
     }
     stopSpeaking();

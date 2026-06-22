@@ -1223,3 +1223,18 @@ select option {
         grid-template-columns: 1fr;
     }
 }
+
+/* Interactive avatar styling for manual Whisper voice mode */
+.voice-overlay.clickable-avatar .voice-avatar {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.voice-overlay.clickable-avatar .voice-avatar:hover {
+    transform: scale(1.06);
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.6);
+}
+
+.voice-overlay.clickable-avatar .voice-avatar:active {
+    transform: scale(0.96);
+}
