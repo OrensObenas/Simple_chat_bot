@@ -941,6 +941,11 @@ function initSpeechRecognition() {
                 setTimeout(() => {
                     if (isVoiceModeActive) startVoiceModeListening();
                 }, 300);
+            } else if (event.error === 'network') {
+                voiceStatusDesc.textContent = "Erreur réseau : la reconnaissance vocale requiert Internet.";
+                setTimeout(() => {
+                    if (isVoiceModeActive) startVoiceModeListening();
+                }, 3000);
             } else if (event.error !== 'aborted') {
                 voiceStatusDesc.textContent = `Erreur : ${event.error}. Réessai...`;
                 setTimeout(() => {
@@ -949,7 +954,11 @@ function initSpeechRecognition() {
             }
         } else {
             if (event.error !== 'no-speech') {
-                alert("Erreur de reconnaissance vocale : " + event.error);
+                if (event.error === 'network') {
+                    alert("Erreur de reconnaissance vocale : connexion au serveur de reconnaissance impossible (nécessite Internet).");
+                } else {
+                    alert("Erreur de reconnaissance vocale : " + event.error);
+                }
             }
             stopSpeaking();
             resetMicButton();
