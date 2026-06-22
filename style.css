@@ -776,6 +776,51 @@ select option {
     border-radius: 2px;
 }
 
+.mic-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: var(--transition-fast);
+    flex-shrink: 0;
+    margin-bottom: 2px;
+    margin-right: 8px;
+}
+
+.mic-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mic-btn.recording {
+    color: white;
+    background: #ef4444;
+    border-color: transparent;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+    animation: micPulse 1.2s infinite ease-in-out alternate;
+}
+
+.mic-btn.processing {
+    color: white;
+    background: var(--accent-gradient);
+    border-color: transparent;
+    animation: micPulse 1.2s infinite ease-in-out alternate;
+    cursor: wait;
+}
+
+@keyframes micPulse {
+    0% { transform: scale(1); box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+    100% { transform: scale(1.05); box-shadow: 0 0 16px rgba(239, 68, 68, 0.8); }
+}
+
 .send-btn {
     width: 40px;
     height: 40px;

@@ -86,6 +86,8 @@ const voiceSelectContainer = document.getElementById('voice-select-container');
 const ttsVoiceSelect = document.getElementById('tts-voice-select');
 const autoplayContainer = document.getElementById('autoplay-container');
 const autoplayCheckbox = document.getElementById('autoplay-checkbox');
+const sttEngineSelect = document.getElementById('stt-engine-select');
+const micBtn = document.getElementById('mic-btn');
 
 // App State
 let activeProvider = localStorage.getItem('active_provider') || 'gemini';
@@ -109,6 +111,13 @@ let currentAudio = null;
 let currentSpeechUtterance = null;
 let browserVoices = [];
 
+// STT State
+let activeSttEngine = localStorage.getItem('active_stt_engine') || 'browser';
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let recognition = null;
+
 // Initialization
 async function init() {
     // Configure marked to handle line breaks (like in a chat)
@@ -122,6 +131,7 @@ async function init() {
     // Set active provider & vocal settings UI values
     providerSelect.value = activeProvider;
     ttsEngineSelect.value = activeTtsEngine;
+    sttEngineSelect.value = activeSttEngine;
     autoplayCheckbox.checked = autoplayEnabled;
     
     // Load config from Express API (.env) or localStorage
@@ -159,6 +169,18 @@ async function init() {
         autoplayEnabled = e.target.checked;
         localStorage.setItem('autoplay_enabled', autoplayEnabled);
     });
+
+    // STT UI Handler
+    sttEngineSelect.addEventListener('change', (e) => {
+        activeSttEngine = e.target.value;
+        localStorage.setItem('active_stt_engine', activeSttEngine);
+    });
+
+    // Dictation Button Handler
+    micBtn.addEventListener('click', toggleSpeechInput);
+
+    // Initialize Speech Recognition
+    initSpeechRecognition();
 
     // Model Config Accordion Trigger
     configAccordionTrigger.addEventListener('click', () => {
@@ -839,6 +861,192 @@ function saveAndDisplayReply(conv, text) {
     });
     saveConversations();
     appendMessage('model', text, activeProvider);
+}
+
+// Speech-to-Text (STT) Integration Functions
+
+// Initialize Native Browser Speech Recognition
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.log("Speech recognition is not natively supported by this browser.");
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'fr-FR';
+
+    recognition.onstart = () => {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        micBtn.title = "En écoute... Cliquez pour arrêter";
+        chatInput.placeholder = "Parlez maintenant...";
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+            const currentVal = chatInput.value.trim();
+            chatInput.value = currentVal ? `${currentVal} ${transcript}` : transcript;
+            chatInput.dispatchEvent(new Event('input'));
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error !== 'no-speech') {
+            alert("Erreur de reconnaissance vocale : " + event.error);
+        }
+        stopSpeaking();
+        resetMicButton();
+    };
+
+    recognition.onend = () => {
+        isRecording = false;
+        resetMicButton();
+    };
+}
+
+// Reset mic button UI to standard state
+function resetMicButton() {
+    micBtn.className = 'mic-btn';
+    micBtn.title = "Activer la dictée vocale";
+    chatInput.placeholder = "Posez une question à Gemini...";
+}
+
+// Toggle voice input recording/dictation based on selected engine
+async function toggleSpeechInput() {
+    stopSpeaking(); // Stop any TTS output playing
+
+    if (isRecording) {
+        if (activeSttEngine === 'browser') {
+            if (recognition) recognition.stop();
+        } else if (activeSttEngine === 'groq') {
+            stopGroqRecording();
+        }
+    } else {
+        if (activeSttEngine === 'browser') {
+            if (!recognition) {
+                alert("La dictée vocale du navigateur n'est pas supportée par ce navigateur. Essayez Google Chrome, ou passez au moteur Groq Whisper.");
+                return;
+            }
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error("Speech recognition start failed:", e);
+            }
+        } else if (activeSttEngine === 'groq') {
+            await startGroqRecording();
+        }
+    }
+}
+
+// Start MediaRecorder audio capture for Groq Whisper
+async function startGroqRecording() {
+    if (!keys.groq) {
+        alert("Veuillez d'abord configurer votre clé API Groq dans la barre latérale pour utiliser Whisper.");
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+
+        let options = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'audio/ogg' };
+        }
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = {}; // browser default
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstart = () => {
+            isRecording = true;
+            micBtn.classList.add('recording');
+            micBtn.title = "Enregistrement en cours... Cliquez pour transcrire";
+            chatInput.placeholder = "Enregistrement audio en cours... parlez puis cliquez à nouveau sur le micro pour l'envoyer.";
+        };
+
+        mediaRecorder.onstop = async () => {
+            isRecording = false;
+            stream.getTracks().forEach(track => track.stop());
+
+            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+
+            micBtn.className = 'mic-btn processing';
+            micBtn.title = "Transcription par Whisper en cours...";
+            chatInput.placeholder = "Transcription par Groq Whisper en cours...";
+
+            await sendAudioToGroq(audioBlob);
+        };
+
+        mediaRecorder.start();
+
+    } catch (err) {
+        console.error("Microphone access denied or error:", err);
+        alert("Impossible d'accéder au microphone. Veuillez vérifier vos autorisations.");
+        resetMicButton();
+    }
+}
+
+// Stop MediaRecorder audio capture
+function stopGroqRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+}
+
+// Upload recorded audio Blob to Groq's Whisper API
+async function sendAudioToGroq(audioBlob) {
+    const groqKey = keys.groq;
+    if (!groqKey) {
+        alert("Clé Groq manquante.");
+        resetMicButton();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'speech.webm');
+    formData.append('model', 'whisper-large-v3');
+    formData.append('language', 'fr');
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqKey}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const errMsg = errData.error?.message || `Erreur Whisper (${response.status})`;
+            throw new Error(errMsg);
+        }
+
+        const data = await response.json();
+        if (data.text) {
+            const currentVal = chatInput.value.trim();
+            chatInput.value = currentVal ? `${currentVal} ${data.text}` : data.text;
+            chatInput.dispatchEvent(new Event('input'));
+        }
+    } catch (e) {
+        console.error("Groq Whisper API error:", e);
+        alert("Erreur de transcription Groq Whisper : " + e.message);
+    } finally {
+        resetMicButton();
+    }
 }
 
 // Start the app
