@@ -88,6 +88,7 @@ const autoplayContainer = document.getElementById('autoplay-container');
 const autoplayCheckbox = document.getElementById('autoplay-checkbox');
 const sttEngineSelect = document.getElementById('stt-engine-select');
 const micBtn = document.getElementById('mic-btn');
+const systemPromptInput = document.getElementById('system-prompt-input');
 
 // Voice Call DOM Elements
 const voiceCallBtn = document.getElementById('voice-call-btn');
@@ -103,6 +104,7 @@ let isVoiceModeActive = false;
 // App State
 let activeProvider = localStorage.getItem('active_provider') || 'gemini';
 let activeModel = localStorage.getItem('active_model') || 'gemini-2.5-flash';
+let systemPrompt = localStorage.getItem('system_prompt') || '';
 let keys = {
     gemini: '',
     groq: '',
@@ -144,6 +146,7 @@ async function init() {
     ttsEngineSelect.value = activeTtsEngine;
     sttEngineSelect.value = activeSttEngine;
     autoplayCheckbox.checked = autoplayEnabled;
+    systemPromptInput.value = systemPrompt;
     
     // Load config from Express API (.env) or localStorage
     await loadConfig();
@@ -168,6 +171,12 @@ async function init() {
         activeModel = e.target.value;
         localStorage.setItem('active_model', activeModel);
         updateBadge();
+    });
+
+    // Event listener: system prompt
+    systemPromptInput.addEventListener('input', (e) => {
+        systemPrompt = e.target.value;
+        localStorage.setItem('system_prompt', systemPrompt);
     });
 
     // Vocal UI handlers
@@ -814,10 +823,17 @@ async function handleSendMessage(e) {
                     parts: msg.parts
                 }));
 
+            const body = { contents: apiContents };
+            if (systemPrompt && systemPrompt.trim() !== '') {
+                body.systemInstruction = {
+                    parts: [{ text: systemPrompt.trim() }]
+                };
+            }
+
             response = await fetch(providerData.url(activeModel, providerKey), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: apiContents })
+                body: JSON.stringify(body)
             });
 
             loadingMessage.remove();
@@ -836,10 +852,17 @@ async function handleSendMessage(e) {
             }
 
         } else {
-            const openaiMessages = conv.messages.map(msg => ({
+            const openaiMessages = [];
+            if (systemPrompt && systemPrompt.trim() !== '') {
+                openaiMessages.push({
+                    role: 'system',
+                    content: systemPrompt.trim()
+                });
+            }
+            openaiMessages.push(...conv.messages.map(msg => ({
                 role: msg.role === 'model' ? 'assistant' : 'user',
                 content: msg.parts[0].text
-            }));
+            })));
 
             const headers = {
                 'Content-Type': 'application/json',
@@ -1360,10 +1383,17 @@ async function sendVoiceModeMessage(text) {
                     parts: msg.parts
                 }));
 
+            const body = { contents: apiContents };
+            if (systemPrompt && systemPrompt.trim() !== '') {
+                body.systemInstruction = {
+                    parts: [{ text: systemPrompt.trim() }]
+                };
+            }
+
             response = await fetch(providerData.url(activeModel, providerKey), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: apiContents })
+                body: JSON.stringify(body)
             });
 
             if (!response.ok) {
@@ -1380,10 +1410,17 @@ async function sendVoiceModeMessage(text) {
             }
 
         } else {
-            const openaiMessages = conv.messages.map(msg => ({
+            const openaiMessages = [];
+            if (systemPrompt && systemPrompt.trim() !== '') {
+                openaiMessages.push({
+                    role: 'system',
+                    content: systemPrompt.trim()
+                });
+            }
+            openaiMessages.push(...conv.messages.map(msg => ({
                 role: msg.role === 'model' ? 'assistant' : 'user',
                 content: msg.parts[0].text
-            }));
+            })));
 
             const headers = {
                 'Content-Type': 'application/json',
